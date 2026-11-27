@@ -1,0 +1,53 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Reservas{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Reservas</h1>
+  <a class="button primary" href="{% url 'web:reservation-create' %}">Nova reserva</a>
+</div>
+
+<form id="filters" class="card filters" novalidate>
+  <label>Recurso
+    <select name="resource"><option value="">Todos</option></select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">Todos</option>
+      {# Valores aceitos pelo filtro da API (contrato), não regra de negócio. #}
+      <option value="PENDENTE">Pendente</option>
+      <option value="CONFIRMADA">Confirmada</option>
+      <option value="CANCELADA">Cancelada</option>
+      <option value="CONCLUIDA">Concluída</option>
+    </select>
+  </label>
+  <label>Início a partir de
+    <input type="datetime-local" name="start_from">
+  </label>
+  <label>Início antes de
+    <input type="datetime-local" name="start_to">
+  </label>
+  <div class="filters-actions">
+    <button type="submit" class="button primary">Filtrar</button>
+    <button type="reset" class="button">Limpar</button>
+  </div>
+</form>
+
+<div id="error" class="error-box" role="alert" hidden></div>
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr><th>#</th><th>Recurso</th><th>Cliente</th><th>Início</th><th>Fim</th><th>Status</th></tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="6" class="muted">Carregando…</td></tr></tbody>
+  </table>
+  <nav id="pagination" class="pagination" aria-label="Paginação"></nav>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{% static 'web/js/reservation-list.js' %}"></script>
+{% endblock %}

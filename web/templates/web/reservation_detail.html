@@ -1,0 +1,45 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Reserva #{{ pk }}{% endblock %}
+
+{% block main_attrs %}data-reservation-id="{{ pk }}"{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Reserva #{{ pk }}</h1>
+  <a class="button" href="{% url 'web:reservation-list' %}">Voltar</a>
+</div>
+
+<div id="error" class="error-box" role="alert" hidden></div>
+
+<section id="reservation" class="card" hidden>
+  <dl class="details">
+    <dt>Status</dt><dd id="r-status"></dd>
+    <dt>Recurso</dt><dd id="r-resource"></dd>
+    <dt>Cliente</dt><dd id="r-customer"></dd>
+    <dt>Início</dt><dd id="r-start"></dd>
+    <dt>Fim</dt><dd id="r-end"></dd>
+    <dt>Atualizada em</dt><dd id="r-updated"></dd>
+  </dl>
+
+  <h2>Ações</h2>
+  {# Botões gerados a partir de `allowed_transitions`, calculado pela API. #}
+  <div id="actions" class="actions"></div>
+</section>
+
+<section class="card">
+  <h2>Histórico</h2>
+  <table class="table">
+    <thead>
+      <tr><th>Quando</th><th>De</th><th>Para</th><th>Idempotency-Key</th><th>Request ID</th></tr>
+    </thead>
+    <tbody id="history-rows"><tr><td colspan="5" class="muted">Carregando…</td></tr></tbody>
+  </table>
+  <nav id="history-pagination" class="pagination" aria-label="Paginação do histórico"></nav>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{% static 'web/js/reservation-detail.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Reservas{% endblock %} · Reservas</title>
+  <link rel="stylesheet" href="{% static 'web/css/app.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'web:reservation-list' %}">Reservas</a>
+    <nav>
+      <a href="{% url 'web:reservation-list' %}"{% if request.resolver_match.url_name != 'resources' %} aria-current="page"{% endif %}>Reservas</a>
+      <a href="{% url 'web:resources' %}"{% if request.resolver_match.url_name == 'resources' %} aria-current="page"{% endif %}>Recursos</a>
+    </nav>
+  </header>
+
+  <main class="container" {% block main_attrs %}{% endblock %}>
+    <div id="flash" class="flash" role="status" hidden></div>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

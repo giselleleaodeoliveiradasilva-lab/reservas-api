@@ -1,0 +1,47 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Nova reserva{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Nova reserva</h1>
+  <a class="button" href="{% url 'web:reservation-list' %}">Voltar</a>
+</div>
+
+<div id="error" class="error-box" role="alert" hidden></div>
+
+<p id="no-resources" class="card muted" hidden>
+  Nenhum recurso cadastrado. <a href="{% url 'web:resources' %}">Cadastre um recurso</a> antes de criar reservas.
+</p>
+
+{# Apenas checagens de formato/obrigatoriedade no HTML; regras (período, conflito, passado) são da API. #}
+<form id="reservation-form" class="card form" novalidate>
+  <label data-field="resource_id">Recurso
+    <select name="resource_id" required><option value="">Carregando…</option></select>
+    <span class="field-error"></span>
+  </label>
+  <label data-field="customer_name">Cliente
+    <input type="text" name="customer_name" maxlength="150" required autocomplete="off">
+    <span class="field-error"></span>
+  </label>
+  <div class="row">
+    <label data-field="start_at">Início
+      <input type="datetime-local" name="start_at" required>
+      <span class="field-error"></span>
+    </label>
+    <label data-field="end_at">Fim
+      <input type="datetime-local" name="end_at" required>
+      <span class="field-error"></span>
+    </label>
+  </div>
+  <p class="muted small">Horários no fuso do seu navegador.</p>
+  <div class="form-actions">
+    <button type="submit" class="button primary">Criar reserva</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{% static 'web/js/reservation-form.js' %}"></script>
+{% endblock %}

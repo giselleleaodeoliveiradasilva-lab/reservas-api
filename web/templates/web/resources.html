@@ -1,0 +1,40 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Recursos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Recursos</h1>
+</div>
+
+<form id="resource-form" class="card form" novalidate>
+  <h2>Novo recurso</h2>
+  <div id="form-error" class="error-box" role="alert" hidden></div>
+  <label data-field="name">Nome
+    <input type="text" name="name" maxlength="150" required autocomplete="off">
+    <span class="field-error"></span>
+  </label>
+  <label data-field="description">Descrição
+    <textarea name="description" maxlength="2000" rows="2"></textarea>
+    <span class="field-error"></span>
+  </label>
+  <div class="form-actions">
+    <button type="submit" class="button primary">Cadastrar</button>
+  </div>
+</form>
+
+<div id="error" class="error-box" role="alert" hidden></div>
+
+<div class="card">
+  <table class="table">
+    <thead><tr><th>#</th><th>Nome</th><th>Descrição</th><th>Criado em</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4" class="muted">Carregando…</td></tr></tbody>
+  </table>
+  <nav id="pagination" class="pagination" aria-label="Paginação"></nav>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{% static 'web/js/resources.js' %}"></script>
+{% endblock %}
