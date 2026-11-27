@@ -274,3 +274,4 @@ O que é coberto:
 - Autenticação e autorização (hoje a API é aberta).
 - Expiração das chaves de idempotência (ex.: job que apaga chaves com mais de 24h).
 - Exportar métricas e traces (Prometheus/OpenTelemetry) além dos logs.
+
