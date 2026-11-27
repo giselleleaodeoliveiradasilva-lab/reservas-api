@@ -11,34 +11,41 @@ O foco é confiabilidade: integridade garantida no banco, operações críticas 
 1. **Cadastro e consulta** de recursos e reservas. Um recurso não pode ter duas reservas *ativas* com horários sobrepostos.
 2. **Mudança de estado** com regras explícitas:
 
+   ```text
+   PENDENTE ──► CONFIRMADA ──► CONCLUIDA
+      │             │
+      └─────────────┴──────► CANCELADA
    ```
-   PENDENTE   ──► CONFIRMADA ──► CONCLUIDA
-      │              │
-      └──────────────┴──────► CANCELADA
-   ```
+
    `CANCELADA` e `CONCLUIDA` são estados finais. Só `PENDENTE` e `CONFIRMADA` ocupam horário.
 3. **Listagem paginada com filtros**, **histórico** de cada reserva e tratamento de **conflito e duplicidade**.
 
 ## Arquitetura
 
-```
-config/                 settings (via variáveis de ambiente), urls, wsgi
-core/                   código transversal, sem regra de negócio
-  middleware.py         RequestIdMiddleware: X-Request-Id + log de acesso
-  logging.py            request_id em contextvars, injetado em todo log
-  exceptions.py         DomainError e categorias (validação, não encontrado, conflito...)
-  exception_handler.py  handler central do DRF: formato de erro único
-  idempotency/          modelo IdempotencyKey, execução idempotente, helpers HTTP
+```text
+config/                  settings (via variáveis de ambiente), urls, wsgi
+core/                    código transversal, sem regra de negócio
+  middleware.py          RequestIdMiddleware: X-Request-Id + log de acesso
+  logging.py             request_id em contextvars, injetado em todo log
+  exceptions.py          DomainError e categorias (validação, não encontrado, conflito...)
+  exception_handler.py   handler central do DRF: formato de erro único
+  views.py               handlers JSON de 404/500 para rotas fora do DRF
+  pagination.py          paginação padrão (page_size até 100)
+  idempotency/           modelo IdempotencyKey, execução idempotente, helpers HTTP
 reservations/
-  models.py             Resource, Reservation, ReservationStatusHistory + constraints
-  state_machine.py      transições permitidas (funções puras)
-  exceptions.py         exceções de domínio de reservas
-  selectors.py          consultas de leitura
-  services.py           casos de uso de escrita: transação, locks, auditoria
-  api/                  serializers, filtros, views finas, urls
-  tests/unit            máquina de estados, idempotência, services
-  tests/integration     endpoints, erros, idempotência, concorrência real
-web/                    interface web: templates + JS que consome a API (sem regra de negócio)
+  models.py              Resource, Reservation, ReservationStatusHistory + constraints
+  state_machine.py       transições permitidas (funções puras)
+  exceptions.py          exceções de domínio de reservas
+  selectors.py           consultas de leitura
+  services.py            casos de uso de escrita: transação, locks, auditoria
+  api/                   serializers, filtros, views finas, urls
+  tests/unit/            máquina de estados, idempotência, serializers, services
+  tests/integration/     endpoints, erros, idempotência, concorrência real
+web/                     interface web, sem regra de negócio
+  views.py, urls.py      páginas que só entregam HTML (sem acesso ao banco)
+  templates/web/         templates Django
+  static/web/            CSS e JavaScript (módulos ES) que consomem a API
+  tests/                 testes das páginas
 ```
 
 As dependências vão sempre de cima para baixo: **HTTP → services → domínio**.
@@ -49,8 +56,8 @@ As dependências vão sempre de cima para baixo: **HTTP → services → domíni
 
 ## Decisões técnicas
 
-### Conflito de horário sem recurso exclusivo de um banco
-O PostgreSQL resolveria isso com `ExclusionConstraint`, mas ela não existe no MySQL. A solução portável é um **lock pessimista na linha do recurso** (`select_for_update()`) antes de checar a sobreposição e inserir. Assim, criações concorrentes para o *mesmo* recurso esperam a vez umas das outras, enquanto recursos diferentes não se bloqueiam. O teste `test_concurrency.py` dispara 5 requisições simultâneas e verifica que exatamente uma vence.
+### Conflito de horário sem depender de recurso específico de um banco
+O PostgreSQL resolveria isso com `ExclusionConstraint`, mas ela não existe no MySQL. A solução portável é um **lock pessimista na linha do recurso** (`select_for_update()`) antes de checar a sobreposição e inserir. Assim, criações concorrentes para o *mesmo* recurso esperam a vez umas das outras, enquanto recursos diferentes não se bloqueiam. O teste `reservations/tests/integration/test_concurrency.py` dispara 5 requisições simultâneas e verifica que exatamente uma vence.
 
 Os intervalos são **semiabertos** `[início, fim)`: uma reserva até 10h e outra a partir das 10h não conflitam.
 
@@ -69,7 +76,7 @@ Os endpoints `POST /reservations/` e `POST /reservations/{id}/transitions/` exig
 - **Só respostas de sucesso ficam salvas.** Um erro de negócio desfaz a transação inteira, chave incluída, e o cliente pode corrigir e tentar de novo.
 
 ### Unicidade de nome portável
-A collation padrão do MySQL ignora maiúsculas e minúsculas; a do PostgreSQL não. Para que "Sala Azul" e "sala  azul" sejam tratados como duplicados nos dois bancos, o modelo grava `normalized_name` (espaços colapsados + `casefold`) com `UniqueConstraint`. A duplicidade é detectada pelo banco, sem SELECT prévio (que teria condição de corrida), e traduzida para 409.
+A collation padrão do MySQL ignora maiúsculas e minúsculas; a do PostgreSQL não. Para que `"Sala Azul"` e `"sala   azul"` (com espaços extras) sejam tratados como duplicados nos dois bancos, o modelo grava `normalized_name` (espaços colapsados + `casefold`) com `UniqueConstraint`. A duplicidade é detectada pelo banco, sem SELECT prévio (que teria condição de corrida), e traduzida para 409.
 
 ### Integridade no banco
 `CheckConstraint(end_at > start_at)`, `CheckConstraint(status válido)`, `UniqueConstraint` nos nomes e nas chaves de idempotência, e FKs com `PROTECT` (histórico de auditoria não é apagado em cascata). No MySQL, os `CheckConstraint` só são respeitados a partir da **versão 8.0.16**.
@@ -91,7 +98,11 @@ Todo erro, de domínio, de validação ou inesperado, sai assim:
   "error": {
     "code": "reservation_conflict",
     "message": "O recurso já possui uma reserva ativa que se sobrepõe a este período.",
-    "details": {"conflicting_reservation_id": 12, "conflicting_start_at": "...", "conflicting_end_at": "..."},
+    "details": {
+      "conflicting_reservation_id": 12,
+      "conflicting_start_at": "...",
+      "conflicting_end_at": "..."
+    },
     "request_id": "9f2c1b..."
   }
 }
@@ -102,7 +113,7 @@ Todo erro, de domínio, de validação ou inesperado, sai assim:
 | 400 | `validation_error`, `malformed_request`, `invalid_reservation_period`, `idempotency_key_required`, `idempotency_key_invalid` |
 | 404 | `not_found`, `resource_not_found`, `reservation_not_found` |
 | 405 | `method_not_allowed` |
-| 409 | `reservation_conflict`, `invalid_status_transition`, `resource_already_exists` |
+| 409 | `reservation_conflict`, `invalid_status_transition`, `resource_already_exists`, `idempotency_request_in_progress` |
 | 422 | `idempotency_key_reused` |
 | 500 | `internal_error`: mensagem genérica, sem traceback; o detalhe vai só para o log, com o `request_id` |
 
@@ -168,7 +179,7 @@ Em produção (`DJANGO_DEBUG=false`), rode `python manage.py collectstatic` e si
 ### Requisitos
 - Python 3.11+
 - PostgreSQL 13+ **ou** MySQL 8.0.16+
-- No Linux, o driver `mysqlclient` precisa dos headers do MySQL (`libmysqlclient-dev` / `mysql-devel`) e de `pkg-config`. No Windows e no macOS, o pip instala a versão pré-compilada.
+- No Linux, o driver `mysqlclient` precisa dos arquivos de desenvolvimento do MySQL (`libmysqlclient-dev` / `mysql-devel`) e de `pkg-config`. No Windows e no macOS, o pip instala a versão pré-compilada.
 
 ### Instalação
 
@@ -176,7 +187,7 @@ Em produção (`DJANGO_DEBUG=false`), rode `python manage.py collectstatic` e si
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-cp .env.example .env               # e edite
+cp .env.example .env               # Windows: copy .env.example .env; depois ajuste os valores
 ```
 
 ### Configuração do banco
@@ -192,7 +203,7 @@ Todas as configurações vêm de variáveis de ambiente, opcionalmente lidas de 
 | `DB_HOST` | `127.0.0.1` | Host |
 | `DB_PORT` | `5432` / `3306` | Porta (o padrão depende do engine) |
 | `DB_CONN_MAX_AGE` | `60` | Tempo, em segundos, que uma conexão é reaproveitada |
-| `DJANGO_SECRET_KEY` | obrigatória se `DEBUG=false` | Chave secreta |
+| `DJANGO_SECRET_KEY` | obrigatória se `DJANGO_DEBUG=false` | Chave secreta |
 | `DJANGO_DEBUG` | `false` | Modo debug |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Hosts aceitos (separados por vírgula) |
 | `LOG_LEVEL` | `INFO` | Nível de log |
@@ -230,7 +241,8 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-Interface: http://localhost:8000/ · API: http://localhost:8000/api/v1/
+- Interface: http://localhost:8000/
+- API: http://localhost:8000/api/v1/
 
 ### Testes
 
@@ -243,7 +255,7 @@ pytest reservations/tests/integration    # só integração
 pytest web                               # páginas da interface (não usam banco)
 ```
 
-Para validar nos dois bancos, troque `DB_ENGINE` e rode de novo:
+Para validar nos dois bancos, troque `DB_ENGINE` e rode de novo (Linux/macOS):
 
 ```bash
 DB_ENGINE=postgresql pytest
